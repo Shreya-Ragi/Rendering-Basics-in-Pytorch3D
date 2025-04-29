@@ -96,7 +96,7 @@ def unproject_depth_image(image, mask, depth, camera):
     assert image.shape[0] == image.shape[1], "Image must be square."
     image_shape = image.shape[0]
     ndc_pixel_coordinates = torch.linspace(1, -1, image_shape)
-    Y, X = torch.meshgrid(ndc_pixel_coordinates, ndc_pixel_coordinates)
+    Y, X = torch.meshgrid(ndc_pixel_coordinates, ndc_pixel_coordinates, indexing = 'ij')
     xy_depth = torch.dstack([X, Y, depth])
     points = camera.unproject_points(
         xy_depth.to(device), in_ndc=False, from_ndc=False, world_coordinates=True,
@@ -124,3 +124,31 @@ def load_cow_mesh(path="data/cow_mesh.obj"):
     vertices, faces, _ = load_obj(path)
     faces = faces.verts_idx
     return vertices, faces
+
+def get_points_renderer_neon(
+    image_size=512, device=None, radius=0.03, background_color=(0, 0, 0)
+):
+    """
+    Returns a Pytorch3D renderer for point clouds.
+
+    Args:
+        image_size (int): The rendered image size.
+        device (torch.device): The torch device to use (CPU or GPU). If not specified,
+            will automatically use GPU if available, otherwise CPU.
+        radius (float): The radius of the rendered point in NDC.
+        background_color (tuple): The background color of the rendered image.
+    
+    Returns:
+        PointsRenderer.
+    """
+    if device is None:
+        if torch.cuda.is_available():
+            device = torch.device("cuda:0")
+        else:
+            device = torch.device("cpu")
+    raster_settings = PointsRasterizationSettings(image_size=image_size, radius=radius, points_per_pixel=10, bin_size=None)
+    renderer = PointsRenderer(
+        rasterizer=PointsRasterizer(raster_settings=raster_settings),
+        compositor=AlphaCompositor(background_color=background_color),
+    )
+    return renderer
